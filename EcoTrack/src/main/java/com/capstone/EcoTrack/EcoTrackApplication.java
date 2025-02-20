@@ -12,7 +12,7 @@ import org.springframework.context.annotation.ComponentScan;
 public class EcoTrackApplication {
 
 	public static void main(String[] args){
-	
+	// edited
 		SpringApplication.run(EcoTrackApplication.class, args);
 	}
 

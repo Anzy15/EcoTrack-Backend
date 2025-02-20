@@ -7,6 +7,7 @@ import com.google.cloud.firestore.*;
 import com.google.firebase.auth.*;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -20,11 +21,13 @@ public class UserService {
 
 	private final Firestore firestore;
     private final FirebaseAuth firebaseAuth;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
-    public UserService(Firestore firestore, FirebaseAuth firebaseAuth) {
+    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder) {
         this.firestore = firestore;
         this.firebaseAuth = firebaseAuth;
+        this.passwordEncoder = passwordEncoder;
     }
     
    
@@ -49,6 +52,8 @@ public class UserService {
         userMap.put("firstName", firstName);
         userMap.put("lastName", lastName);
         userMap.put("email", email);
+        String encryptedPassword = passwordEncoder.encode(password);
+        userMap.put("password", encryptedPassword);
         userMap.put("role", role);
         userMap.put("createdAt", com.google.cloud.firestore.FieldValue.serverTimestamp());
 
@@ -93,7 +98,7 @@ public class UserService {
 
 
     public boolean validatePassword(User user, String password) {
-        return user.getPassword().equals(password); // Replace with hashed password validation
+        return passwordEncoder.matches(password, user.getPassword()); // Replace with hashed password validation
     }
 
     // Dummy token generator (replace with JWT implementation)

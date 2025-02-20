@@ -2,6 +2,10 @@ package com.capstone.EcoTrack.controller;
 
 import com.capstone.EcoTrack.service.AuthService;
 import com.capstone.EcoTrack.dto.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,13 +27,21 @@ public class AuthController {
         }
     }
 
-    //@PostMapping("/login")
-   // public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
-    //    try {
-        //    String token = authService.loginUser(loginRequest.getEmail(), loginRequest.getPassword());
-       //     return ResponseEntity.ok("Firebase Token: " + token);
-      //  } catch (Exception e) {
-       //     return ResponseEntity.status(401).body("Login Failed: " + e.getMessage());
-      //  }
-   // }
+    
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+        try {
+            String token = authService.loginUser(loginRequest.getIdentifier(), loginRequest.getPassword());
+            
+            // Create response with more details
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Login successful!");
+            response.put("token", token);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body("Login Failed: " + e.getMessage());
+        }
+    }
+    
 }

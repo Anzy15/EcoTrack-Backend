@@ -1,8 +1,22 @@
 package com.capstone.EcoTrack.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class LoginRequest {
-    private String identifier;
+    @JsonProperty("identifier")
+    private String identifier; // This can be either email or username
+
+    @JsonProperty("password")
     private String password;
+
+    // Default constructor
+    public LoginRequest() {}
+
+    // Constructor with parameters
+    public LoginRequest(String identifier, String password) {
+        this.identifier = identifier;
+        this.password = password;
+    }
 
     // Getters and setters
     public String getIdentifier() {
@@ -20,34 +34,12 @@ public class LoginRequest {
     public void setPassword(String password) {
         this.password = password;
     }
+
+    @Override
+    public String toString() {
+        return "LoginRequest{" +
+                "identifier='" + identifier + '\'' +
+                ", password='[PROTECTED]'" +
+                '}';
+    }
 }
-
-//public class LoginRequest {
- //   private String email;
-//    private String password;
-
-//    // Constructors
-//    public LoginRequest() {}
-//
-//    public LoginRequest(String email, String password) {
- //       this.email = email;
-  //      this.password = password;
-  ///  }/
-
-    // Getters and Setters
-//    public String getEmail() {
-//        return email;
-//    }
-//
- //   public void setEmail(String email) {
-//        this.email = email;
-   // }
-
-    //public String getPassword() {
-    //    return password;
-   // }
-
-    //public void setPassword(String password) {
-     //   this.password = password;
-   // }
-//}

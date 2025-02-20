@@ -64,45 +64,46 @@ public class UserController {
 
     // 🔹 Login User
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
-        try {
-            if (loginData == null || !loginData.containsKey("identifier") || !loginData.containsKey("password")) {
-                return ResponseEntity.badRequest().body("Username/Email and Password are required.");
-            }
-
-            String identifier = loginData.get("identifier");
-            String password = loginData.get("password");
-
-            // Find user by email or username
-            User user = userService.getUserByEmailOrUsername(identifier);
-            if (user == null) {
-                return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
-            }
-
-            // Validate password
-            boolean isPasswordValid = userService.validatePassword(user, password);
-            if (!isPasswordValid) {
-                return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
-            }
-
-            // Generate authentication token
-            String token = userService.generateToken(user);
-
-            // Return success response
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Login successful!");
-            response.put("token", token);
-            response.put("userId", user.getUserId());
-            response.put("username", user.getUsername());
-            response.put("email", user.getEmail());
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("An error occurred during login: " + e.getMessage());
+public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
+    try {
+        if (loginData == null || !loginData.containsKey("identifier") || !loginData.containsKey("password")) {
+            return ResponseEntity.badRequest().body("Username/Email and Password are required.");
         }
+
+        String identifier = loginData.get("identifier");
+        String password = loginData.get("password");
+
+        // Find user by email or username
+        User user = userService.getUserByEmailOrUsername(identifier);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
+        }
+
+        // Validate password
+        boolean isPasswordValid = userService.validatePassword(user, password);
+        if (!isPasswordValid) {
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
+        }
+
+        // Generate authentication token
+        String token = userService.generateToken(user);
+
+        // Return success response
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Login successful!");
+        response.put("token", token);
+        response.put("userId", user.getUserId());
+        response.put("username", user.getUsername());
+        response.put("email", user.getEmail());
+
+        return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                .body("An error occurred during login: " + e.getMessage());
     }
+}
+
 
 
 
