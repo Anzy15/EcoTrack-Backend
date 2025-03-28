@@ -12,6 +12,8 @@ public class User {
     private String password;
     private String role;
     private Timestamp createdAt;  // Using com.google.cloud.Timestamp
+    private String location;
+    private UserPreferences preferences;
 
     // Default constructor
     public User() {}
@@ -97,6 +99,26 @@ public class User {
         this.createdAt = createdAt;
     }
 
+    @PropertyName("location")
+    public String getLocation() {
+        return location;
+    }
+
+    @PropertyName("location")
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    @PropertyName("preferences")
+    public UserPreferences getPreferences() {
+        return preferences;
+    }
+
+    @PropertyName("preferences")
+    public void setPreferences(UserPreferences preferences) {
+        this.preferences = preferences;
+    }
+
     @Override
     public String toString() {
         return "User{" +
@@ -107,6 +129,8 @@ public class User {
                 ", email='" + email + '\'' +
                 ", role='" + role + '\'' +
                 ", createdAt=" + createdAt +
+                ", location='" + location + '\'' +
+                ", preferences=" + preferences +
                 '}';
     }
 }

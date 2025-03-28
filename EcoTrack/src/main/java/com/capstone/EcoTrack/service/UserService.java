@@ -36,36 +36,66 @@ public class UserService {
             throw new IllegalStateException("Firestore instance is not available!");
         }
 
-        //Create user in Firebase Authentication
-        UserRecord.CreateRequest request = new UserRecord.CreateRequest()
-                .setEmail(email)
-                .setPassword(password)
-                .setDisplayName(username);
-
-        UserRecord userRecord = firebaseAuth.createUser(request);
-        String userId = userRecord.getUid();
-
-        // Store user in Firestore Database
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("userId", userId);
-        userMap.put("username", username);
-        userMap.put("firstName", firstName);
-        userMap.put("lastName", lastName);
-        userMap.put("email", email);
-        String encryptedPassword = passwordEncoder.encode(password);
-        userMap.put("password", encryptedPassword);
-        userMap.put("role", role);
-        userMap.put("createdAt", com.google.cloud.firestore.FieldValue.serverTimestamp());
+        System.out.println("Starting user registration process...");
+        System.out.println("Username: " + username);
+        System.out.println("Email: " + email);
 
         try {
-            firestore.collection("users").document(userId).set(userMap).get(); // Forces synchronous write
-            System.out.println("🔥 User successfully written to Firestore: " + userMap);
-        } catch (Exception e) {
-            System.err.println("❌ Firestore write failed: " + e.getMessage());
-            throw new RuntimeException("Error writing user to Firestore", e);
-        }
+            // Create user in Firebase Authentication
+            System.out.println("Creating user in Firebase Auth...");
+            UserRecord.CreateRequest request = new UserRecord.CreateRequest()
+                    .setEmail(email)
+                    .setPassword(password)
+                    .setDisplayName(username);
 
-        return userId;
+            UserRecord userRecord = firebaseAuth.createUser(request);
+            String userId = userRecord.getUid();
+            System.out.println("Firebase Auth user created successfully with ID: " + userId);
+
+            // Store user in Firestore Database
+            System.out.println("Preparing Firestore document...");
+            Map<String, Object> userMap = new HashMap<>();
+            userMap.put("userId", userId);
+            userMap.put("username", username);
+            userMap.put("firstName", firstName);
+            userMap.put("lastName", lastName);
+            userMap.put("email", email);
+            String encryptedPassword = passwordEncoder.encode(password);
+            userMap.put("password", encryptedPassword);
+            userMap.put("role", role);
+            userMap.put("createdAt", com.google.cloud.firestore.FieldValue.serverTimestamp());
+            
+            // Initialize default preferences
+            UserPreferences preferences = new UserPreferences();
+            userMap.put("preferences", preferences);
+
+            System.out.println("Writing to Firestore...");
+            try {
+                ApiFuture<WriteResult> writeResult = firestore.collection("users").document(userId).set(userMap);
+                WriteResult result = writeResult.get(); // Wait for the write to complete
+                System.out.println("Firestore write successful! Update time: " + result.getUpdateTime());
+                return userId;
+            } catch (Exception e) {
+                System.err.println("❌ Firestore write failed: " + e.getMessage());
+                e.printStackTrace();
+                // Attempt to delete the Firebase Auth user since Firestore write failed
+                try {
+                    firebaseAuth.deleteUser(userId);
+                    System.out.println("Cleaned up Firebase Auth user after Firestore failure");
+                } catch (Exception cleanupError) {
+                    System.err.println("Failed to clean up Firebase Auth user: " + cleanupError.getMessage());
+                }
+                throw new RuntimeException("Failed to write user data to Firestore: " + e.getMessage(), e);
+            }
+        } catch (FirebaseAuthException e) {
+            System.err.println("❌ Firebase Auth error: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to create user in Firebase Auth: " + e.getMessage(), e);
+        } catch (Exception e) {
+            System.err.println("❌ Unexpected error during registration: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Registration failed: " + e.getMessage(), e);
+        }
     }
     public User getUserByEmailOrUsername(String identifier) {
         // Use the injected Firestore instance
@@ -158,5 +188,61 @@ public class UserService {
     public void deleteUser(String userId) throws FirebaseAuthException {
         FirebaseAuth.getInstance().deleteUser(userId);
         firestore.collection("users").document(userId).delete();
+    }
+
+    // Update User Profile Information
+    public void updateProfileInfo(String userId, String firstName, String lastName, String location) throws ExecutionException, InterruptedException {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("firstName", firstName);
+        updates.put("lastName", lastName);
+        updates.put("location", location);
+        firestore.collection("users").document(userId).update(updates).get();
+    }
+
+    // Update User Email
+    public void updateEmail(String userId, String newEmail) throws FirebaseAuthException, ExecutionException, InterruptedException {
+        // Update in Firebase Auth
+        UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                .setEmail(newEmail);
+        firebaseAuth.updateUser(request);
+
+        // Update in Firestore
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("email", newEmail);
+        firestore.collection("users").document(userId).update(updates).get();
+    }
+
+    // Update User Password
+    public void updatePassword(String userId, String newPassword) throws FirebaseAuthException {
+        UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                .setPassword(newPassword);
+        firebaseAuth.updateUser(request);
+    }
+
+    // Update User Preferences
+    public void updatePreferences(String userId, UserPreferences preferences) throws ExecutionException, InterruptedException {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("preferences", preferences);
+        firestore.collection("users").document(userId).update(updates).get();
+    }
+
+    // Get User Profile
+    public Map<String, Object> getUserProfile(String userId) throws ExecutionException, InterruptedException {
+        User user = getUserById(userId);
+        if (user == null) {
+            return null;
+        }
+
+        Map<String, Object> profile = new HashMap<>();
+        profile.put("userId", user.getUserId());
+        profile.put("username", user.getUsername());
+        profile.put("firstName", user.getFirstName());
+        profile.put("lastName", user.getLastName());
+        profile.put("email", user.getEmail());
+        profile.put("location", user.getLocation());
+        profile.put("preferences", user.getPreferences());
+        profile.put("createdAt", user.getCreatedAt());
+
+        return profile;
     }
 }

@@ -132,4 +132,96 @@ public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
         userService.deleteUser(id);
         return ResponseEntity.ok("User deleted successfully");
     }
+
+    // Get User Profile
+    @GetMapping("/profile/{userId}")
+    public ResponseEntity<?> getUserProfile(@PathVariable String userId) {
+        try {
+            Map<String, Object> profile = userService.getUserProfile(userId);
+            if (profile == null) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok(profile);
+        } catch (ExecutionException | InterruptedException e) {
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                    .body("Error fetching user profile: " + e.getMessage());
+        }
+    }
+
+    // Update Profile Information
+    @PutMapping("/profile/{userId}/info")
+    public ResponseEntity<?> updateProfileInfo(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> profileData) {
+        try {
+            if (!profileData.containsKey("firstName") || !profileData.containsKey("lastName") || !profileData.containsKey("location")) {
+                return ResponseEntity.badRequest().body("Missing required fields");
+            }
+
+            userService.updateProfileInfo(
+                userId,
+                profileData.get("firstName"),
+                profileData.get("lastName"),
+                profileData.get("location")
+            );
+
+            return ResponseEntity.ok("Profile information updated successfully");
+        } catch (ExecutionException | InterruptedException e) {
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                    .body("Error updating profile information: " + e.getMessage());
+        }
+    }
+
+    // Update Email
+    @PutMapping("/profile/{userId}/email")
+    public ResponseEntity<?> updateEmail(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> emailData) {
+        try {
+            if (!emailData.containsKey("newEmail")) {
+                return ResponseEntity.badRequest().body("New email is required");
+            }
+
+            userService.updateEmail(userId, emailData.get("newEmail"));
+            return ResponseEntity.ok("Email updated successfully");
+        } catch (FirebaseAuthException e) {
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
+                    .body("Error updating email: " + e.getMessage());
+        } catch (ExecutionException | InterruptedException e) {
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                    .body("Error updating email: " + e.getMessage());
+        }
+    }
+
+    // Update Password
+    @PutMapping("/profile/{userId}/password")
+    public ResponseEntity<?> updatePassword(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> passwordData) {
+        try {
+            if (!passwordData.containsKey("newPassword")) {
+                return ResponseEntity.badRequest().body("New password is required");
+            }
+
+            userService.updatePassword(userId, passwordData.get("newPassword"));
+            return ResponseEntity.ok("Password updated successfully");
+        } catch (FirebaseAuthException e) {
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
+                    .body("Error updating password: " + e.getMessage());
+        }
+    }
+
+    // Update Preferences
+    @PutMapping("/profile/{userId}/preferences")
+    public ResponseEntity<?> updatePreferences(
+            @PathVariable String userId,
+            @RequestBody UserPreferences preferences) {
+        try {
+            userService.updatePreferences(userId, preferences);
+            return ResponseEntity.ok("Preferences updated successfully");
+        } catch (ExecutionException | InterruptedException e) {
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                    .body("Error updating preferences: " + e.getMessage());
+        }
+    }
 }
