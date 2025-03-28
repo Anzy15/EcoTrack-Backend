@@ -213,10 +213,42 @@ public class UserService {
     }
 
     // Update User Password
-    public void updatePassword(String userId, String newPassword) throws FirebaseAuthException {
-        UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
-                .setPassword(newPassword);
-        firebaseAuth.updateUser(request);
+    public void updatePassword(String userId, String oldPassword, String newPassword) throws Exception {
+        // First, get the user from Firestore
+        User user = getUserById(userId);
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        // Verify the old password
+        if (!validatePassword(user, oldPassword)) {
+            throw new RuntimeException("Invalid old password");
+        }
+
+        try {
+            // Update password in Firebase Auth
+            UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                    .setPassword(newPassword);
+            firebaseAuth.updateUser(request);
+
+            // Hash the new password
+            String hashedPassword = passwordEncoder.encode(newPassword);
+
+            // Update password in Firestore
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("password", hashedPassword);
+            firestore.collection("users").document(userId).update(updates).get();
+
+            System.out.println("Password updated successfully for user: " + userId);
+        } catch (FirebaseAuthException e) {
+            System.err.println("❌ Firebase Auth error while updating password: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to update password in Firebase Auth: " + e.getMessage(), e);
+        } catch (Exception e) {
+            System.err.println("❌ Error while updating password: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to update password: " + e.getMessage(), e);
+        }
     }
 
     // Update User Preferences

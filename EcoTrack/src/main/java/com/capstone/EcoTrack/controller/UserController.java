@@ -199,14 +199,33 @@ public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
             @PathVariable String userId,
             @RequestBody Map<String, String> passwordData) {
         try {
-            if (!passwordData.containsKey("newPassword")) {
-                return ResponseEntity.badRequest().body("New password is required");
+            if (!passwordData.containsKey("oldPassword") || !passwordData.containsKey("newPassword")) {
+                return ResponseEntity.badRequest().body("Both old and new passwords are required");
             }
 
-            userService.updatePassword(userId, passwordData.get("newPassword"));
+            String oldPassword = passwordData.get("oldPassword");
+            String newPassword = passwordData.get("newPassword");
+
+            // Validate password requirements
+            if (newPassword.length() < 6) {
+                return ResponseEntity.badRequest().body("New password must be at least 6 characters long");
+            }
+
+            userService.updatePassword(userId, oldPassword, newPassword);
             return ResponseEntity.ok("Password updated successfully");
-        } catch (FirebaseAuthException e) {
-            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
+        } catch (RuntimeException e) {
+            if (e.getMessage().equals("Invalid old password")) {
+                return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
+                        .body("Invalid old password");
+            }
+            if (e.getMessage().equals("User not found")) {
+                return ResponseEntity.status(HttpStatus.SC_NOT_FOUND)
+                        .body("User not found");
+            }
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
+                    .body("Error updating password: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
                     .body("Error updating password: " + e.getMessage());
         }
     }
