@@ -3,9 +3,7 @@ package com.capstone.EcoTrack.service;
 import com.capstone.EcoTrack.model.*;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
-//import com.google.cloud.firestore.v1.FirestoreClient;
 import com.google.firebase.auth.*;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -13,21 +11,21 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 @Service
 public class UserService {
-
-	private final Firestore firestore;
+    private final Firestore firestore;
     private final FirebaseAuth firebaseAuth;
     private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
 
     @Autowired
-    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder) {
+    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder, AuthService authService) {
         this.firestore = firestore;
         this.firebaseAuth = firebaseAuth;
         this.passwordEncoder = passwordEncoder;
+        this.authService = authService;
     }
     
    
@@ -131,11 +129,6 @@ public class UserService {
         return passwordEncoder.matches(password, user.getPassword()); // Replace with hashed password validation
     }
 
-    // Dummy token generator (replace with JWT implementation)
-    public String generateToken(User user) {
-        return UUID.randomUUID().toString(); // Replace with JWT token generation
-    }
-    
     public String loginUser(String identifier, String password) {
         User user = getUserByEmailOrUsername(identifier);
 
@@ -143,14 +136,12 @@ public class UserService {
             return "User not found!";
         }
 
-        if (!validatePassword(user, password)) {
+        if (!authService.validatePassword(user, password)) {
             return "Invalid password!";
         }
 
-        // Generate token upon successful authentication
-        return generateToken(user); 
+        return authService.generateToken(user);
     }
-
 
     // 🔹 Authenticate User (Login)
     public User authenticateUser(String email) throws ExecutionException, InterruptedException {
