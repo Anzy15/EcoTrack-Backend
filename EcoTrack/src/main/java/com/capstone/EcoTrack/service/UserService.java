@@ -7,6 +7,7 @@ import com.google.firebase.auth.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.http.ResponseEntity;
 
 import java.util.HashMap;
 import java.util.List;
@@ -19,82 +20,183 @@ public class UserService {
     private final FirebaseAuth firebaseAuth;
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
+    private final JwtService jwtService;
 
     @Autowired
-    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder, AuthService authService) {
+    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder, AuthService authService, JwtService jwtService) {
         this.firestore = firestore;
         this.firebaseAuth = firebaseAuth;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
+        this.jwtService = jwtService;
     }
     
    
-    public String registerUser(String username, String firstName, String lastName, String email, String password, String role) throws Exception {
-        if (firestore == null) {
-            throw new IllegalStateException("Firestore instance is not available!");
-        }
-
-        System.out.println("Starting user registration process...");
-        System.out.println("Username: " + username);
-        System.out.println("Email: " + email);
-
+    public ResponseEntity<?> registerUser(User user) {
         try {
-            // Create user in Firebase Authentication
-            System.out.println("Creating user in Firebase Auth...");
-            UserRecord.CreateRequest request = new UserRecord.CreateRequest()
-                    .setEmail(email)
-                    .setPassword(password)
-                    .setDisplayName(username);
+            // Check if user already exists
+            Query query = firestore.collection("users")
+                .whereEqualTo("email", user.getEmail());
+            QuerySnapshot querySnapshot = query.get().get();
 
-            UserRecord userRecord = firebaseAuth.createUser(request);
-            String userId = userRecord.getUid();
-            System.out.println("Firebase Auth user created successfully with ID: " + userId);
-
-            // Store user in Firestore Database
-            System.out.println("Preparing Firestore document...");
-            Map<String, Object> userMap = new HashMap<>();
-            userMap.put("userId", userId);
-            userMap.put("username", username);
-            userMap.put("firstName", firstName);
-            userMap.put("lastName", lastName);
-            userMap.put("email", email);
-            String encryptedPassword = passwordEncoder.encode(password);
-            userMap.put("password", encryptedPassword);
-            userMap.put("role", role);
-            userMap.put("createdAt", com.google.cloud.firestore.FieldValue.serverTimestamp());
-            
-            // Initialize default preferences
-            UserPreferences preferences = new UserPreferences();
-            userMap.put("preferences", preferences);
-
-            System.out.println("Writing to Firestore...");
-            try {
-                ApiFuture<WriteResult> writeResult = firestore.collection("users").document(userId).set(userMap);
-                WriteResult result = writeResult.get(); // Wait for the write to complete
-                System.out.println("Firestore write successful! Update time: " + result.getUpdateTime());
-                return userId;
-            } catch (Exception e) {
-                System.err.println("❌ Firestore write failed: " + e.getMessage());
-                e.printStackTrace();
-                // Attempt to delete the Firebase Auth user since Firestore write failed
-                try {
-                    firebaseAuth.deleteUser(userId);
-                    System.out.println("Cleaned up Firebase Auth user after Firestore failure");
-                } catch (Exception cleanupError) {
-                    System.err.println("Failed to clean up Firebase Auth user: " + cleanupError.getMessage());
-                }
-                throw new RuntimeException("Failed to write user data to Firestore: " + e.getMessage(), e);
+            if (!querySnapshot.isEmpty()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User with this email already exists");
+                return ResponseEntity.badRequest().body(error);
             }
-        } catch (FirebaseAuthException e) {
-            System.err.println("❌ Firebase Auth error: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Failed to create user in Firebase Auth: " + e.getMessage(), e);
+
+            // Hash password
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+            // Save user to Firestore
+            String userId = firestore.collection("users").document().getId();
+            user.setUserId(userId);
+            firestore.collection("users").document(userId).set(user).get();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "User registered successfully");
+            response.put("userId", userId);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.err.println("❌ Unexpected error during registration: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Registration failed: " + e.getMessage(), e);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
+
+    public ResponseEntity<?> loginUser(User user) {
+        try {
+            System.out.println("Login attempt for email: " + user.getEmail());
+            
+            // Find user by email
+            Query query = firestore.collection("users")
+                .whereEqualTo("email", user.getEmail());
+            QuerySnapshot querySnapshot = query.get().get();
+
+            if (querySnapshot.isEmpty()) {
+                System.out.println("User not found for email: " + user.getEmail());
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            User foundUser = querySnapshot.getDocuments().get(0).toObject(User.class);
+            System.out.println("User found, verifying password");
+
+            // Verify password
+            if (!passwordEncoder.matches(user.getPassword(), foundUser.getPassword())) {
+                System.out.println("Invalid password for user: " + user.getEmail());
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Invalid password");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            System.out.println("Password verified, generating token");
+            // Generate JWT token
+            String token = jwtService.generateToken(foundUser);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            System.out.println("Login successful for user: " + user.getEmail());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Error during login: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+
+    public ResponseEntity<?> getUserProfile(String userId) {
+        try {
+            User user = firestore.collection("users").document(userId).get().get().toObject(User.class);
+            if (user == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Create a profile map without sensitive information
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("userId", user.getUserId());
+            profile.put("username", user.getUsername());
+            profile.put("firstName", user.getFirstName());
+            profile.put("lastName", user.getLastName());
+            profile.put("email", user.getEmail());
+            profile.put("location", user.getLocation());
+            profile.put("preferences", user.getPreferences());
+            profile.put("createdAt", user.getCreatedAt());
+
+            return ResponseEntity.ok(profile);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    public ResponseEntity<?> updateUserProfile(String userId, User user) {
+        try {
+            User existingUser = firestore.collection("users").document(userId).get().get().toObject(User.class);
+            if (existingUser == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Update only allowed fields
+            existingUser.setFirstName(user.getFirstName());
+            existingUser.setLastName(user.getLastName());
+            existingUser.setLocation(user.getLocation());
+
+            firestore.collection("users").document(userId).set(existingUser).get();
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    public ResponseEntity<?> updatePassword(String userId, User user) {
+        try {
+            User existingUser = firestore.collection("users").document(userId).get().get().toObject(User.class);
+            if (existingUser == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Verify old password
+            if (!passwordEncoder.matches(user.getOldPassword(), existingUser.getPassword())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Invalid old password");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Update password
+            existingUser.setPassword(passwordEncoder.encode(user.getNewPassword()));
+            firestore.collection("users").document(userId).set(existingUser).get();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Password updated successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    public ResponseEntity<?> getCollectionStats(String userId) {
+        try {
+            // TODO: Implement collection stats retrieval
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalCollections", 0);
+            stats.put("lastCollection", null);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
     public User getUserByEmailOrUsername(String identifier) {
         // Use the injected Firestore instance
         CollectionReference users = firestore.collection("users");
@@ -124,23 +226,8 @@ public class UserService {
         return null; // User not found
     }
 
-
     public boolean validatePassword(User user, String password) {
         return passwordEncoder.matches(password, user.getPassword()); // Replace with hashed password validation
-    }
-
-    public String loginUser(String identifier, String password) {
-        User user = getUserByEmailOrUsername(identifier);
-
-        if (user == null) {
-            return "User not found!";
-        }
-
-        if (!authService.validatePassword(user, password)) {
-            return "Invalid password!";
-        }
-
-        return authService.generateToken(user);
     }
 
     // 🔹 Authenticate User (Login)
@@ -191,16 +278,71 @@ public class UserService {
     }
 
     // Update User Email
-    public void updateEmail(String userId, String newEmail) throws FirebaseAuthException, ExecutionException, InterruptedException {
-        // Update in Firebase Auth
-        UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
-                .setEmail(newEmail);
-        firebaseAuth.updateUser(request);
+    public void updateEmail(String userId, String newEmail) throws Exception {
+        try {
+            // First check if user exists in Firestore
+            DocumentReference userDoc = firestore.collection("users").document(userId);
+            DocumentSnapshot snapshot = userDoc.get().get();
+            
+            if (!snapshot.exists()) {
+                throw new Exception("User not found in Firestore");
+            }
 
-        // Update in Firestore
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("email", newEmail);
-        firestore.collection("users").document(userId).update(updates).get();
+            User user = snapshot.toObject(User.class);
+            if (user == null) {
+                throw new Exception("User data is invalid");
+            }
+
+            // Check if new email is already in use by another user
+            QuerySnapshot emailCheck = firestore.collection("users")
+                .whereEqualTo("email", newEmail)
+                .get()
+                .get();
+
+            boolean emailInUseByOtherUser = emailCheck.getDocuments().stream()
+                .anyMatch(doc -> !doc.getId().equals(userId));
+
+            if (emailInUseByOtherUser) {
+                throw new Exception("Email is already in use by another user");
+            }
+
+            // Update Firestore first
+            user.setEmail(newEmail);
+            userDoc.set(user).get();
+
+            // Then try to update or create Firebase Auth user
+            try {
+                // Try to get the user from Firebase Auth
+                UserRecord userRecord = firebaseAuth.getUser(userId);
+                // If user exists, update their email
+                UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                    .setEmail(newEmail);
+                firebaseAuth.updateUser(request);
+            } catch (FirebaseAuthException e) {
+                if (e.getErrorCode().equals("user-not-found")) {
+                    // Create new Firebase Auth user if they don't exist
+                    UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+                        .setUid(userId)
+                        .setEmail(newEmail)
+                        .setEmailVerified(false)
+                        .setPassword("tempPassword123!@#");
+                    
+                    try {
+                        firebaseAuth.createUser(createRequest);
+                        System.out.println("Created new Firebase Auth user for: " + userId);
+                    } catch (FirebaseAuthException createError) {
+                        System.err.println("Warning: Could not create Firebase Auth user: " + createError.getMessage());
+                        // Don't throw exception here, as Firestore update was successful
+                    }
+                } else {
+                    System.err.println("Warning: Could not update Firebase Auth: " + e.getMessage());
+                    // Don't throw exception here, as Firestore update was successful
+                }
+            }
+
+        } catch (Exception e) {
+            throw new Exception("Error updating email: " + e.getMessage());
+        }
     }
 
     // Update User Password
@@ -247,25 +389,5 @@ public class UserService {
         Map<String, Object> updates = new HashMap<>();
         updates.put("preferences", preferences);
         firestore.collection("users").document(userId).update(updates).get();
-    }
-
-    // Get User Profile
-    public Map<String, Object> getUserProfile(String userId) throws ExecutionException, InterruptedException {
-        User user = getUserById(userId);
-        if (user == null) {
-            return null;
-        }
-
-        Map<String, Object> profile = new HashMap<>();
-        profile.put("userId", user.getUserId());
-        profile.put("username", user.getUsername());
-        profile.put("firstName", user.getFirstName());
-        profile.put("lastName", user.getLastName());
-        profile.put("email", user.getEmail());
-        profile.put("location", user.getLocation());
-        profile.put("preferences", user.getPreferences());
-        profile.put("createdAt", user.getCreatedAt());
-
-        return profile;
     }
 }
