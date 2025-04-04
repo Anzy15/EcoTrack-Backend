@@ -1,246 +1,67 @@
 package com.capstone.EcoTrack.controller;
 
-
-import com.capstone.EcoTrack.model.*;
-import com.capstone.EcoTrack.service.*;
-import com.google.firebase.auth.FirebaseAuthException;
-
-import org.apache.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.capstone.EcoTrack.model.User;
+import com.capstone.EcoTrack.service.UserService;
+
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/api/users")
 public class UserController {
 
     private final UserService userService;
 
+    @Autowired
     public UserController(UserService userService) {
         this.userService = userService;
     }
 
-    // Register User
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> userData) {
-        try {
-            // ✅ Input validation
-            if (!userData.containsKey("username") || !userData.containsKey("firstName") ||!userData.containsKey("lastName") ||
-            	!userData.containsKey("email") ||!userData.containsKey("password") || !userData.containsKey("role")) {
-                return ResponseEntity.badRequest().body("Missing required fields");
-            }
-
-            String username = userData.get("username");
-            String firstName = userData.get("firstName");
-            String lastName = userData.get("lastName");
-            String email = userData.get("email");
-            String password = userData.get("password");
-            String role = userData.get("role");
-
-            // ✅ Call user service to register user
-            String userId = userService.registerUser(username, firstName, lastName, email,  password, role);
-
-            // ✅ Success response
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "User registered successfully!");
-            response.put("userId", userId);
-
-            return ResponseEntity.ok(response);
-
-        } catch (FirebaseAuthException e) {
-            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Firebase authentication failed: " + e.getMessage());
-
-        } catch (ExecutionException | InterruptedException e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body("Firestore write error: " + e.getMessage());
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body("Registration failed: " + e.getMessage());
-        }
+    public ResponseEntity<?> registerUser(@RequestBody User user) {
+        return userService.registerUser(user);
     }
 
-
-    // Login User
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
-    	try {
-    		if (loginData == null || !loginData.containsKey("identifier") || !loginData.containsKey("password")) {
-    			return ResponseEntity.badRequest().body("Username/Email and Password are required.");
-    		}
-
-    		String identifier = loginData.get("identifier");
-    		String password = loginData.get("password");
-
-    		// Find user by email or username
-    		User user = userService.getUserByEmailOrUsername(identifier);
-    		if (user == null) {
-    			return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
-    		}
-
-    		// Validate password
-    		boolean isPasswordValid = userService.validatePassword(user, password);
-    		if (!isPasswordValid) {
-    			return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body("Invalid username/email or password.");
-    		}
-
-    		// Generate authentication token
-    		String token = userService.generateToken(user);
-
-    		// Return success response
-    		Map<String, Object> response = new HashMap<>();
-    		response.put("message", "Login successful!");
-    		response.put("token", token);
-    		response.put("userId", user.getUserId());
-    		response.put("username", user.getUsername());
-    		response.put("email", user.getEmail());
-
-    		return ResponseEntity.ok(response);
-
-    	} catch (Exception e) {
-    		return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-    				.body("An error occurred during login: " + e.getMessage());
-    	}
+    public ResponseEntity<?> loginUser(@RequestBody User user) {
+        return userService.loginUser(user);
     }
 
-
-
-
-    // 🔹 Get User by ID
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getUser(@PathVariable String id) throws ExecutionException, InterruptedException {
-        User user = userService.getUserById(id);
-        return user != null ? ResponseEntity.ok(user) : ResponseEntity.notFound().build();
-    }
-    
-    @GetMapping("/test")
-    public ResponseEntity<String> testGetEndpoint(){
-    	return ResponseEntity.ok("Test Get Endpoint is WORKING!!!");
-    }
-
-    // 🔹 Update User
-    @PatchMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable String id, @RequestBody Map<String, Object> updates) {
-        userService.updateUser(id, updates);
-        return ResponseEntity.ok("User updated successfully");
-    }
-
-    // 🔹 Delete User
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable String id) throws FirebaseAuthException {
-        userService.deleteUser(id);
-        return ResponseEntity.ok("User deleted successfully");
-    }
-
-    // Get User Profile
     @GetMapping("/profile/{userId}")
     public ResponseEntity<?> getUserProfile(@PathVariable String userId) {
-        try {
-            Map<String, Object> profile = userService.getUserProfile(userId);
-            if (profile == null) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.ok(profile);
-        } catch (ExecutionException | InterruptedException e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error fetching user profile: " + e.getMessage());
-        }
+        return userService.getUserProfile(userId);
     }
 
-    // Update Profile Information
-    @PutMapping("/profile/{userId}/info")
-    public ResponseEntity<?> updateProfileInfo(
-            @PathVariable String userId,
-            @RequestBody Map<String, String> profileData) {
-        try {
-            if (!profileData.containsKey("firstName") || !profileData.containsKey("lastName") || !profileData.containsKey("location")) {
-                return ResponseEntity.badRequest().body("Missing required fields");
-            }
-
-            userService.updateProfileInfo(
-                userId,
-                profileData.get("firstName"),
-                profileData.get("lastName"),
-                profileData.get("location")
-            );
-
-            return ResponseEntity.ok("Profile information updated successfully");
-        } catch (ExecutionException | InterruptedException e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error updating profile information: " + e.getMessage());
-        }
+    @PutMapping("/profile/{userId}")
+    public ResponseEntity<?> updateUserProfile(@PathVariable String userId, @RequestBody User user) {
+        return userService.updateUserProfile(userId, user);
     }
 
-    // Update Email
-    @PutMapping("/profile/{userId}/email")
-    public ResponseEntity<?> updateEmail(
-            @PathVariable String userId,
-            @RequestBody Map<String, String> emailData) {
-        try {
-            if (!emailData.containsKey("newEmail")) {
-                return ResponseEntity.badRequest().body("New email is required");
-            }
-
-            userService.updateEmail(userId, emailData.get("newEmail"));
-            return ResponseEntity.ok("Email updated successfully");
-        } catch (FirebaseAuthException e) {
-            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
-                    .body("Error updating email: " + e.getMessage());
-        } catch (ExecutionException | InterruptedException e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error updating email: " + e.getMessage());
-        }
-    }
-
-    // Update Password
     @PutMapping("/profile/{userId}/password")
-    public ResponseEntity<?> updatePassword(
-            @PathVariable String userId,
-            @RequestBody Map<String, String> passwordData) {
+    public ResponseEntity<?> updatePassword(@PathVariable String userId, @RequestBody User user) {
+        return userService.updatePassword(userId, user);
+    }
+
+    @PutMapping("/profile/{userId}/email")
+    public ResponseEntity<?> updateEmail(@PathVariable String userId, @RequestBody Map<String, String> request) {
         try {
-            if (!passwordData.containsKey("oldPassword") || !passwordData.containsKey("newPassword")) {
-                return ResponseEntity.badRequest().body("Both old and new passwords are required");
-            }
-
-            String oldPassword = passwordData.get("oldPassword");
-            String newPassword = passwordData.get("newPassword");
-
-            // Validate password requirements
-            if (newPassword.length() < 6) {
-                return ResponseEntity.badRequest().body("New password must be at least 6 characters long");
-            }
-
-            userService.updatePassword(userId, oldPassword, newPassword);
-            return ResponseEntity.ok("Password updated successfully");
-        } catch (RuntimeException e) {
-            if (e.getMessage().equals("Invalid old password")) {
-                return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED)
-                        .body("Invalid old password");
-            }
-            if (e.getMessage().equals("User not found")) {
-                return ResponseEntity.status(HttpStatus.SC_NOT_FOUND)
-                        .body("User not found");
-            }
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error updating password: " + e.getMessage());
+            userService.updateEmail(userId, request.get("newEmail"));
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Email updated successfully");
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error updating password: " + e.getMessage());
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
 
-    // Update Preferences
-    @PutMapping("/profile/{userId}/preferences")
-    public ResponseEntity<?> updatePreferences(
-            @PathVariable String userId,
-            @RequestBody UserPreferences preferences) {
-        try {
-            userService.updatePreferences(userId, preferences);
-            return ResponseEntity.ok("Preferences updated successfully");
-        } catch (ExecutionException | InterruptedException e) {
-            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR)
-                    .body("Error updating preferences: " + e.getMessage());
-        }
+    @GetMapping("/profile/{userId}/collection-stats")
+    public ResponseEntity<?> getCollectionStats(@PathVariable String userId) {
+        return userService.getCollectionStats(userId);
     }
 }

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/auth1")
 public class AuthController {
-
+    /* 
     @Autowired
     private AuthService authService;
 
@@ -43,5 +43,5 @@ public class AuthController {
             return ResponseEntity.status(401).body("Login Failed: " + e.getMessage());
         }
     }
-    
+    */
 }
